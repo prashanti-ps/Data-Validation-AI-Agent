@@ -365,32 +365,6 @@ This turns the project from an individual AI workflow into an **operational data
 
 ---
 
-## Future Enhancements
-
-Potential next iterations include:
-
-### Confidence & Evidence Scoring
-
-Provide a confidence score and supporting evidence for each RCA.
-
-### Human-in-the-Loop Remediation
-
-Allow engineers to review and approve recommended remediation actions.
-
-### Recurring Issue Intelligence
-
-Automatically identify repeated failures and group them into systemic issues.
-
-### Intelligent Escalation
-
-Route low-confidence or high-impact investigations to the appropriate engineering team.
-
-### Customer Adaptation
-
-Configure agents and tools around a customer's existing data sources, metadata systems, workflows, and operational processes.
-
----
-
 ## Key Takeaway
 
 This project demonstrates how **Agentic AI + enterprise data + tool calling + multi-agent orchestration** can transform a manual data-engineering workflow into an automated investigation system.
