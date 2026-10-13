@@ -54,17 +54,15 @@ Report Stored and Shared with Engineers
           ▼                                             ▼
 ┌────────────────────────────────┐    ┌────────────────────────────────┐
 │ read_input_comparison_data     │    │ read_input_comparison_data     │
-│ (ADK State / Artifacts)        │    │ (ADK State / Artifacts)        │
 └────────────────────────────────┘    └────────────────────────────────┘
 ┌────────────────────────────────┐    ┌────────────────────────────────┐
 │ get_full_table_lineage         │    │ get_full_column_lineage        │
-│ (PostgreSQL - Recursive CTE)   │    │ (PostgreSQL - Recursive CTE)   │
 └────────────────────────────────┘    └────────────────────────────────┘
 ┌────────────────────────────────┐    ┌────────────────────────────────┐
 │ query_SC1_source_NKS           │    │ get_ingestion_script_and_      │
 │ (Snowflake / Teradata)         │    │ schema_metadata                │
-└────────────────────────────────┘    │ (PostgreSQL - DDL / Scripts)   │
-┌────────────────────────────────┐    └────────────────────────────────┘
+└────────────────────────────────┘    └────────────────────────────────┘
+┌────────────────────────────────┐    
 │ query_SC1_target_bronze_nks    │
 │ (BigQuery - Bronze Layer)      │
 └────────────────────────────────┘
