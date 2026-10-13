@@ -15,7 +15,7 @@ Engineers typically need to:
 - Query multiple systems and inspect schemas or ingestion logic
 - Find where the mismatch originated and document the RCA
 
-This process is time-consuming and difficult to scale across many tables and pipelines.
+This process was time-consuming and difficult to scale across multiple tables and pipelines. A typical investigation took 80–90 minutes manually.
 
 ## The Solution
 
@@ -41,58 +41,62 @@ Report Stored and Shared with Engineers
 ## Architecture
 
 ```text
-Data Certification / Airflow
-           │
-           ▼
- Mismatch Detected → FastAPI
-           │
-           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      MASTER AGENT                               │
-│                    (Google ADK + Gemini)                        │
-│  Validate input • Fetch mismatch context • Manage session state│
-│  Select and coordinate investigation agents                     │
-└────────────────────────────┬────────────────────────────────────┘
-                             │
-              ┌──────────────┴──────────────┐
-              ▼                             ▼
-┌──────────────────────────┐   ┌──────────────────────────┐
-│   COUNT MISMATCH AGENT   │   │  COLUMN MISMATCH AGENT   │
-├──────────────────────────┤   ├──────────────────────────┤
-│ Investigation tools:     │   │ Investigation tools:     │
-│ • Read natural keys      │   │ • Read column lineage    │
-│ • Query source records   │   │ • Read schema / DDL      │
-│ • Query Bronze records   │   │ • Inspect column mapping │
-│ • Query target records   │   │ • Inspect ingestion logic│
-│ • Trace missing/extra IDs│   │ • Compare column values  │
-└─────────────┬────────────┘   └─────────────┬────────────┘
-              │                              │
-              └──────────────┬───────────────┘
-                             ▼
-                  ┌─────────────────────┐
-                  │     MERGER AGENT    │
-                  │ Combine findings    │
-                  │ Evidence + RCA      │
-                  │ Recommended actions │
-                  └──────────┬──────────┘
-                             ▼
-                       RCA REPORT
-                             │
-                   ┌─────────┴─────────┐
-                   ▼                   ▼
-            Cloud Storage         Engineering Team
-            Report / logs         Review / next steps
+                   Mismatch Detected → FastAPI
+                              │
+                              ▼
+                        MASTER AGENT
+                  (Understand + Orchestrate)
+                              │
+          ├─────────────────────────────────────────────┐
+          ▼                                             ▼
+    Count Mismatch Agent                        Column Mismatch Agent
+          │                                             │
+          ▼                                             ▼
+┌────────────────────────────────┐    ┌────────────────────────────────┐
+│ read_input_comparison_data     │    │ read_input_comparison_data     │
+│ (ADK State / Artifacts)        │    │ (ADK State / Artifacts)        │
+└────────────────────────────────┘    └────────────────────────────────┘
+┌────────────────────────────────┐    ┌────────────────────────────────┐
+│ get_full_table_lineage         │    │ get_full_column_lineage        │
+│ (PostgreSQL - Recursive CTE)   │    │ (PostgreSQL - Recursive CTE)   │
+└────────────────────────────────┘    └────────────────────────────────┘
+┌────────────────────────────────┐    ┌────────────────────────────────┐
+│ query_SC1_source_NKS           │    │ get_ingestion_script_and_      │
+│ (Snowflake / Teradata)         │    │ schema_metadata                │
+└────────────────────────────────┘    │ (PostgreSQL - DDL / Scripts)   │
+┌────────────────────────────────┐    └────────────────────────────────┘
+│ query_SC1_target_bronze_nks    │
+│ (BigQuery - Bronze Layer)      │
+└────────────────────────────────┘
+          │                                             │
+          └──────────────────────┬──────────────────────┘
+                                 ▼
+                             MERGER AGENT
+                     (Combine Findings + RCA)
+                                 │
+                  ┌──────────────┴──────────────┐
+                  ▼                             ▼
+        ┌──────────────────────┐     ┌──────────────────────┐
+        │   upload_to_gcs()    │     │     send_email()     │
+        └──────────┬───────────┘     └──────────┬───────────┘
+                   ▼                            ▼
+        ┌──────────────────────┐     ┌──────────────────────┐
+        │      GCS Bucket      │     │    Stakeholders      │
+        │     (RCA Report)     │     │    (Email / RCA)     │
+        └──────────────────────┘     └──────────────────────┘
 
-Shared tools and enterprise data:
-  BigQuery          → Target warehouse queries
-  Snowflake/Teradata→ Source system queries
-  PostgreSQL        → Metadata, natural keys, and lineage
-  Certification data→ Mismatch details and results
-  GCS               → Large artifacts and RCA reports
+
+
+┌────────────────────────────────┐
+│      SHARED TOOLS / UTILITIES  │
+├────────────────────────────────┤
+│ Database Connection Management │
+│ ADK Session State & Artifacts  │
+│ Logging & Error Handling       │
+│ Retry & Rate Limit Handling    │
+└────────────────────────────────┘    
+
 ```
-
-*Tool labels describe capabilities, not exact internal function names.* Google ADK **session state** shares structured findings between agents; **artifacts** hold large JSON results without repeatedly inserting them into the LLM context.
-
 ## Tech Stack
 
 **Python · Google ADK · Gemini · FastAPI · Airflow · BigQuery · Snowflake · Teradata · PostgreSQL · GCS · Docker · GKE · GitHub Actions · Helm · ArgoCD**
@@ -133,9 +137,9 @@ RCA + Recommended Next Steps → Engineer Review
 
 ## Production Impact
 
-| Metric | Impact |
-|---|---|
-| **Manual Investigation** | Automated first-pass RCA for count and column mismatches, reducing the need for engineers to manually query multiple systems, trace lineage, and inspect ingestion logic. |
-| **Root Cause Identification** | Traces missing records and incorrect column values across data layers to identify where discrepancies originated, using source data, metadata, and lineage as evidence. |
-| **RCA Generation** | Automatically generates a consolidated RCA report with the identified root cause, supporting evidence, and recommended remediation steps. |
-| **Engineering Efficiency** | Shifts engineering effort from repetitive investigations toward validating findings and resolving underlying data-quality issues. |
+| Metric | Result |
+| --- | --- |
+| **Time to Initial RCA / Manual Investigation** | Reduced from **80–90 minutes to 3–5 minutes**, achieving ~95% faster investigations. |
+| **Automated Investigation Coverage** | Percentage of eligible mismatches investigated automatically without manual intervention. |
+| **Human Escalation Rate** | Percentage of investigations requiring human review due to insufficient evidence or uncertain root cause. |
+
