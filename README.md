@@ -1,374 +1,141 @@
-# An agentic data-quality investigation system
+# Agentic AI for Data Validation
 
-An AI-powered multi-agent system that automatically investigates data-quality mismatches between source systems and a target data warehouse, identifies the likely root cause using enterprise data and metadata, and generates an actionable Root Cause Analysis (RCA).
-
-The system transforms a traditionally manual, multi-step data-engineering investigation into an automated agentic workflow.
+Note: This is a high-level representation of a system I worked on professionally. The architecture, workflows, tools, and examples shown here have been generalized for confidentiality and do not include proprietary code, credentials, internal configurations, or sensitive business information.
 
 ---
 
-## Problem
+## The Problem
 
-Data certification and reconciliation processes can identify that a mismatch exists, but determining **why** it happened often requires significant manual investigation.
+Data-certification workflows detect mismatches between source systems and a target data warehouse, but identifying **why** the data differs still requires manual investigation.
 
-A typical investigation requires an engineer to:
+Engineers typically need to:
 
-1. Identify the mismatched records or columns
-2. Trace data lineage across multiple layers
-3. Query source and target systems
-4. Inspect ingestion logic and schemas
-5. Determine where the data diverged
-6. Document the root cause and next steps
+- Identify mismatched records or column values
+- Trace source-to-target lineage across data layers
+- Query multiple systems and inspect schemas or ingestion logic
+- Find where the mismatch originated and document the RCA
 
-This process is time-consuming, inconsistent, and difficult to scale as the number of data sources and tables increases.
+This process is time-consuming and difficult to scale across many tables and pipelines.
 
----
+## The Solution
 
-## Solution
+A **multi-agent data-validation application** that automates the first-pass investigation and generates an evidence-backed Root Cause Analysis (RCA).
 
-This project uses a **multi-agent architecture** to automate the first-pass investigation.
-
-Instead of asking a single LLM to analyze everything, the system decomposes the investigation into specialized responsibilities:
-
-* **Master Agent** — understands the investigation context, gathers evidence, and orchestrates the workflow
-* **Count Mismatch Agent** — investigates missing or extra records and traces natural keys across source and target layers
-* **Column Mismatch Agent** — investigates value-level discrepancies using column lineage, schemas, and ingestion logic
-* **Merger Agent** — synthesizes findings from the investigation agents into a concise RCA report
-
-The agents use enterprise data sources and metadata as evidence rather than relying solely on the language model's generated response.
-
----
-
-## High-Level Architecture
+- **Master Agent:** Validates the request, collects evidence, and coordinates the investigation
+- **Count Mismatch Agent:** Traces missing or extra records using natural keys
+- **Column Mismatch Agent:** Investigates incorrect column values using lineage, schemas, and ingestion logic
+- **Merger Agent:** Combines findings into an RCA with supporting evidence and next steps
 
 ```text
-                         ┌──────────────────────┐
-                         │   Data Certification │
-                         │       / Airflow      │
-                         └──────────┬───────────┘
-                                    │
-                              Mismatch Found
-                                    │
-                                    ▼
-                         ┌──────────────────────┐
-                         │    FastAPI / API     │
-                         │      Interface       │
-                         └──────────┬───────────┘
-                                    │
-                                    ▼
-                    ┌────────────────────────────────┐
-                    │          MASTER AGENT          │
-                    │       Google ADK + Gemini      │
-                    │                                │
-                    │  • Validate input              │
-                    │  • Gather investigation data  │
-                    │  • Manage state/artifacts      │
-                    │  • Orchestrate agents          │
-                    └───────────────┬────────────────┘
-                                    │
-                    ┌───────────────┴────────────────┐
-                    │                                │
-                    ▼                                ▼
-          ┌──────────────────┐             ┌──────────────────┐
-          │ Count Mismatch   │             │ Column Mismatch  │
-          │     Agent        │             │      Agent       │
-          │                  │             │                  │
-          │ • Missing keys   │             │ • Column lineage │
-          │ • Source checks  │             │ • Schema / DDL   │
-          │ • Bronze checks  │             │ • Ingestion code │
-          │ • Root cause     │             │ • Root cause     │
-          └────────┬─────────┘             └────────┬─────────┘
-                   │                                │
-                   └───────────────┬────────────────┘
-                                   │
-                                   ▼
-                         ┌──────────────────────┐
-                         │     MERGER AGENT     │
-                         │                      │
-                         │ • Combine findings   │
-                         │ • Generate RCA       │
-                         │ • Summarize evidence │
-                         └──────────┬───────────┘
-                                    │
-                                    ▼
-                         ┌──────────────────────┐
-                         │      RCA Report      │
-                         │                      │
-                         │ • Root cause         │
-                         │ • Evidence            │
-                         │ • Investigation      │
-                         │ • Next steps         │
-                         └──────────┬───────────┘
-                                    │
-                         ┌──────────┴──────────┐
-                         ▼                     ▼
-                  Cloud Storage          Stakeholder
-                  Report / Logs             Delivery
+Data Mismatch Detected
+        ↓
+Master Agent → Evidence Collection
+        ↓
+Count / Column Mismatch Investigation
+        ↓
+Merger Agent → RCA + Next Steps
+        ↓
+Report Stored and Shared with Engineers
 ```
 
----
-
-## Agentic Workflow
-
-### 1. Trigger
-
-An automated data-certification workflow can trigger an investigation when a mismatch is detected.
-
-A human can also initiate an investigation using the API/interface by providing the relevant process identifier.
-
-### 2. Evidence Collection
-
-The Master Agent gathers:
-
-* Certification results
-* Mismatch records
-* Table and column metadata
-* Natural-key information
-* Lineage information
-* Relevant schema and ingestion metadata
-
-Large datasets are stored as artifacts rather than repeatedly passing them through the LLM context.
-
-### 3. Specialized Investigation
-
-The investigation is divided by mismatch type.
-
-**Count Mismatch Agent**
-
-Investigates whether records:
-
-* Were never ingested
-* Were dropped during transformation
-* Exist in the source but not the target
-* Differ across ingestion layers
-
-**Column Mismatch Agent**
-
-Investigates:
-
-* Column-level lineage
-* Source-to-target mappings
-* Schema definitions
-* Ingestion logic
-* Transformation-related discrepancies
-
-### 4. Root Cause Synthesis
-
-The Merger Agent combines the findings into a single human-readable RCA.
-
-The report focuses on:
-
-* What failed
-* Where the discrepancy originated
-* Evidence supporting the conclusion
-* Recommended next investigation/remediation steps
-
-### 5. Delivery
-
-The RCA is stored for audit/troubleshooting purposes and delivered to relevant engineering stakeholders.
-
----
-
-## Agent Tools & Enterprise Data
-
-The agents interact with enterprise systems through controlled tools rather than directly relying on LLM knowledge.
+## Architecture
 
 ```text
-                    Agent
-                      │
-        ┌─────────────┼─────────────┐
-        ▼             ▼             ▼
-    BigQuery      Snowflake      Teradata
-        │             │             │
-        └─────────────┼─────────────┘
-                      ▼
-               PostgreSQL
-          Metadata / Lineage
-                      │
-                      ▼
-              Schemas / DDLs
-             Ingestion Metadata
+Data Certification / Airflow
+           │
+           ▼
+ Mismatch Detected → FastAPI
+           │
+           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      MASTER AGENT                               │
+│                    (Google ADK + Gemini)                        │
+│  Validate input • Fetch mismatch context • Manage session state│
+│  Select and coordinate investigation agents                     │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+              ┌──────────────┴──────────────┐
+              ▼                             ▼
+┌──────────────────────────┐   ┌──────────────────────────┐
+│   COUNT MISMATCH AGENT   │   │  COLUMN MISMATCH AGENT   │
+├──────────────────────────┤   ├──────────────────────────┤
+│ Investigation tools:     │   │ Investigation tools:     │
+│ • Read natural keys      │   │ • Read column lineage    │
+│ • Query source records   │   │ • Read schema / DDL      │
+│ • Query Bronze records   │   │ • Inspect column mapping │
+│ • Query target records   │   │ • Inspect ingestion logic│
+│ • Trace missing/extra IDs│   │ • Compare column values  │
+└─────────────┬────────────┘   └─────────────┬────────────┘
+              │                              │
+              └──────────────┬───────────────┘
+                             ▼
+                  ┌─────────────────────┐
+                  │     MERGER AGENT    │
+                  │ Combine findings    │
+                  │ Evidence + RCA      │
+                  │ Recommended actions │
+                  └──────────┬──────────┘
+                             ▼
+                       RCA REPORT
+                             │
+                   ┌─────────┴─────────┐
+                   ▼                   ▼
+            Cloud Storage         Engineering Team
+            Report / logs         Review / next steps
+
+Shared tools and enterprise data:
+  BigQuery          → Target warehouse queries
+  Snowflake/Teradata→ Source system queries
+  PostgreSQL        → Metadata, natural keys, and lineage
+  Certification data→ Mismatch details and results
+  GCS               → Large artifacts and RCA reports
 ```
 
-This allows the agent to ground its investigation in **actual data and metadata**.
+*Tool labels describe capabilities, not exact internal function names.* Google ADK **session state** shares structured findings between agents; **artifacts** hold large JSON results without repeatedly inserting them into the LLM context.
 
----
+## Tech Stack
 
-## Agent Communication
+**Python · Google ADK · Gemini · FastAPI · Airflow · BigQuery · Snowflake · Teradata · PostgreSQL · GCS · Docker · GKE · GitHub Actions · Helm · ArgoCD**
 
-The system uses Google ADK session state and artifacts for inter-agent communication.
+## End-to-End Example: Count Mismatch
 
-* **Session state** stores structured investigation results
-* **Artifacts** store larger JSON datasets by reference
-* Agents do not repeatedly send large payloads through the LLM context
-* This reduces unnecessary token usage and keeps the workflow manageable
+Suppose data certification detects records that exist in a source table but are missing from the target.
 
----
+1. **Trigger:** Airflow/data certification detects the mismatch and submits the process details through FastAPI.
+2. **Collect evidence:** The Master Agent retrieves the mismatch results, natural keys, and relevant metadata.
+3. **Investigate:** The Count Mismatch Agent compares records across the source, Bronze, and target layers to locate where the keys diverged.
+4. **Generate RCA:** The Merger Agent combines the findings into a likely root cause, supporting evidence, and recommended next steps.
+5. **Deliver:** The report is stored in Cloud Storage and shared with the engineering team.
 
-## Reliability & Scalability
+For a **column mismatch**, the Column Mismatch Agent instead checks column lineage, source-to-target mappings, schema definitions, and ingestion logic.
 
-A key engineering challenge was handling concurrent agent execution and LLM rate limits.
+## Production Safety and Guardrails
 
-The system incorporates:
-
-* Dynamic batching
-* Concurrency controls
-* Retry and exponential backoff
-* Controlled execution sequencing
-* Rate-limit handling
-* Health checks
-* Persistent logs
-* Failure handling
-
-The initial design used parallel investigation agents. Based on observed rate-limit behavior, the workflow was changed to controlled sequential execution to improve reliability under load.
-
-This illustrates an important principle of production agentic systems:
-
-> **Agent orchestration is not only about reasoning—it also requires managing concurrency, cost, reliability, and system limits.**
-
----
-
-## Technology Stack
-
-| Layer              | Technology                                            |
-| ------------------ | ----------------------------------------------------- |
-| Language           | Python                                                |
-| Agent Framework    | Google Agent Development Kit (ADK)                    |
-| LLM                | Gemini                                                |
-| API                | FastAPI                                               |
-| Data Warehouse     | BigQuery                                              |
-| Source Systems     | Snowflake, Teradata                                   |
-| Metadata / Lineage | PostgreSQL                                            |
-| Orchestration      | Apache Airflow                                        |
-| Storage            | Google Cloud Storage                                  |
-| Containerization   | Docker                                                |
-| Compute            | Google Kubernetes Engine                              |
-| CI/CD              | GitHub Actions                                        |
-| Deployment         | Helm + ArgoCD                                         |
-| Networking         | Istio                                                 |
-| Security           | Secret Manager + Workload Identity                    |
-| Observability      | OpenTelemetry, Cloud Trace, Cloud Logging, Prometheus |
-
----
-
-## Operational KPIs
-
-The system is designed to measure more than just whether an agent produces an answer.
-
-### Investigation Efficiency
-
-**Mean Time to RCA (MTTR)**
-Time from mismatch detection to delivery of the initial RCA.
-
-**Manual Investigation Reduction**
-Percentage reduction in engineer investigation time compared with the traditional workflow.
-
-**First-Pass RCA Rate**
-Percentage of mismatches for which the automated investigation provides a usable first-pass RCA.
-
-### Agent Quality
-
-**RCA Accuracy**
-Percentage of automated root-cause conclusions confirmed by engineers.
-
-**Evidence Coverage**
-Percentage of RCA conclusions supported by traceable source/metadata evidence.
-
-**Human Escalation Rate**
-Percentage of investigations requiring human review.
-
-### Operational Reliability
-
-**Agent Completion Rate**
-Percentage of investigations completed without timeout or system failure.
-
-**Tool Failure Rate**
-Frequency of failed database/API/tool calls.
-
-**Average Investigation Cost**
-LLM + query + infrastructure cost per investigation.
-
-### Adoption
-
-**RCA Adoption Rate**
-Percentage of generated reports that engineers use without restarting the investigation manually.
-
-**Recurring Issue Detection**
-Number of repeated/systemic data-quality issues identified across investigations.
-
----
-
-## Business Impact
-
-The system changes the data-quality workflow from:
+The LLM guides the investigation, but data and metadata checks happen through **controlled tools**. The RCA should be supported by retrieved evidence, not by the model's assumptions.
 
 ```text
-Mismatch
-   ↓
-Engineer investigates manually
-   ↓
-Trace lineage
-   ↓
-Query multiple systems
-   ↓
-Inspect ingestion logic
-   ↓
-Determine RCA
-   ↓
-Write report
+LLM Investigation
+        ↓
+Controlled Source / Target / Metadata Queries
+        ↓
+Evidence-Backed Findings
+        ↓
+RCA + Recommended Next Steps → Engineer Review
 ```
 
-to:
+- **Input validation:** The Master Agent validates the investigation request and gathers the relevant certification context.
+- **Evidence grounding:** The agents use actual mismatch records, natural keys, lineage, schema/DDL, and ingestion metadata.
+- **Controlled access:** Database and metadata access is performed through tools instead of unrestricted LLM access.
+- **Context management:** Structured findings are stored in session state; large query results are passed as artifacts.
+- **Human-owned remediation:** The documented workflow generates an RCA and recommendations; it does not describe automatic changes to source or target data.
 
-```text
-Mismatch
-   ↓
-Agentic investigation
-   ↓
-Evidence gathering
-   ↓
-Specialized RCA agents
-   ↓
-Evidence-backed root cause
-   ↓
-Automated RCA
-   ↓
-Engineer focuses on remediation
-```
+**For inconclusive investigations:** The safe handling policy is to flag missing evidence or tool failures and request engineer review rather than state an unverified root cause. This is a guardrail to enforce; the source design does not confirm it is already automated.
 
-The resulting benefits include:
+## Production Impact
 
-* Faster data-quality investigations
-* Reduced repetitive engineering effort
-* More consistent RCA methodology
-* Better visibility into recurring data-quality issues
-* Faster escalation of systemic problems
-* More engineering capacity for prevention and remediation
-
----
-
-## Dashboard & Operational Visibility
-
-A dashboard can be layered on top of the agent workflow to provide operational visibility into:
-
-* Investigation volume
-* Investigation status
-* RCA turnaround time
-* RCA accuracy
-* Automated vs. human investigations
-* Agent success/failure rates
-* Recurring root-cause categories
-* Data-quality trends
-* System reliability
-* Cost per investigation
-
-This turns the project from an individual AI workflow into an **operational data-quality platform**.
-
----
-
-## Key Takeaway
-
-This project demonstrates how **Agentic AI + enterprise data + tool calling + multi-agent orchestration** can transform a manual data-engineering workflow into an automated investigation system.
-
-The core principle is:
-
-> **Don't use an LLM simply to generate an answer. Give the agent the tools, data, context, and controls required to investigate a real operational problem.**
+| Metric | Impact |
+|---|---|
+| **Manual Investigation** | Automated first-pass RCA for count and column mismatches, reducing the need for engineers to manually query multiple systems, trace lineage, and inspect ingestion logic. |
+| **Root Cause Identification** | Traces missing records and incorrect column values across data layers to identify where discrepancies originated, using source data, metadata, and lineage as evidence. |
+| **RCA Generation** | Automatically generates a consolidated RCA report with the identified root cause, supporting evidence, and recommended remediation steps. |
+| **Engineering Efficiency** | Shifts engineering effort from repetitive investigations toward validating findings and resolving underlying data-quality issues. |
